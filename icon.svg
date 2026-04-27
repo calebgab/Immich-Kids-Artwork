@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="80" fill="#0f172a"/>
+
+  <!-- Palette body -->
+  <path d="M256 100 C370 100 430 175 430 265 C430 330 395 370 345 378 C312 384 295 362 272 374 C252 384 242 416 208 405 C142 383 86 328 86 265 C86 175 148 100 256 100Z" fill="#fef9ee"/>
+
+  <!-- Thumb hole -->
+  <circle cx="212" cy="178" r="42" fill="#0f172a"/>
+
+  <!-- Paint blobs -->
+  <circle cx="316" cy="142" r="34" fill="#ef4444"/>
+  <circle cx="400" cy="210" r="34" fill="#f97316"/>
+  <circle cx="408" cy="308" r="34" fill="#eab308"/>
+  <circle cx="338" cy="374" r="34" fill="#22c55e"/>
+  <circle cx="136" cy="336" r="34" fill="#3b82f6"/>
+  <circle cx="122" cy="218" r="34" fill="#a855f7"/>
+
+  <!-- Paintbrush handle -->
+  <rect x="244" y="290" width="22" height="110" rx="8" fill="#92400e" transform="rotate(-30 255 345)"/>
+  <!-- Brush ferrule -->
+  <rect x="244" y="282" width="22" height="20" rx="3" fill="#9ca3af" transform="rotate(-30 255 345)"/>
+  <!-- Brush tip -->
+  <ellipse cx="217" cy="258" rx="11" ry="22" fill="#2563eb" transform="rotate(-30 217 258)"/>
+</svg>

@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Artwork Camera">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon.svg">
+    <title>Artwork Camera</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --border: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow: hidden;
+        }
+
+        body.safe-area-inset {
+            padding-top: max(16px, env(safe-area-inset-top));
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+        }
+
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100vh;
+            height: 100dvh;
+            padding: 0;
+        }
+
+        /* Screen: Settings */
+        #settingsScreen {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .screen-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            letter-spacing: -0.5px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .button-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .button-primary:active {
+            background: var(--primary-dark);
+            transform: scale(0.98);
+        }
+
+        .button-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .button-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .button-secondary:active {
+            background: #2d3748;
+        }
+
+        .button-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .button-danger:active {
+            background: #dc2626;
+            transform: scale(0.98);
+        }
+
+        .info-box {
+            padding: 12px 16px;
+            background: rgba(37, 99, 235, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 8px;
+            font-size: 13px;
+            color: #60a5fa;
+            line-height: 1.5;
+        }
+
+        /* Screen: Album Selection */
+        #albumScreen {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 16px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .album-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .album-item {
+            padding: 16px;
+            background: var(--bg-card);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .album-item:active {
+            background: rgba(37, 99, 235, 0.2);
+            border-color: var(--primary);
+        }
+
+        .album-name {
+            font-weight: 500;
+            font-size: 16px;
+        }
+
+        .album-badge {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 4px;
+            cursor: pointer;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .section-chevron {
+            font-size: 11px;
+            color: var(--text-secondary);
+            transition: transform 0.2s;
+        }
+
+        .section-chevron.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .section-items {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .section-items.collapsed {
+            display: none;
+        }
+
+        .favorite-btn {
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 4px 6px;
+            line-height: 1;
+            opacity: 0.6;
+        }
+
+        .favorite-btn.active {
+            opacity: 1;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Screen: Camera */
+        #cameraScreen {
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            gap: 0;
+            flex: 1;
+            position: relative;
+        }
+
+        .camera-header {
+            padding: 16px 20px;
+            padding-top: max(16px, env(safe-area-inset-top));
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .album-display {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .album-display .name {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .camera-feed-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        canvas {
+            display: none;
+        }
+
+        .camera-controls {
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+            z-index: 10;
+        }
+
+        .capture-button {
+            flex: 1;
+            height: 56px;
+            background: var(--primary);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .capture-button:active {
+            background: var(--primary-dark);
+            transform: scale(0.96);
+        }
+
+        .capture-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .flip-button {
+            width: 56px;
+            height: 56px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .flip-button:active {
+            background: #2d3748;
+        }
+
+        /* Screen: Preview */
+        #previewScreen {
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            gap: 0;
+            flex: 1;
+        }
+
+        .preview-image-container {
+            flex: 1;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .preview-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .preview-controls {
+            padding: 20px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 12px;
+        }
+
+        .preview-controls button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-retake {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-retake:active {
+            background: #2d3748;
+        }
+
+        .btn-upload {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-upload:active {
+            background: #059669;
+            transform: scale(0.98);
+        }
+
+        .btn-upload:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Screen: Upload */
+        #uploadScreen {
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            gap: 20px;
+            overflow-y: auto;
+            flex: 1;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-progress {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .progress-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .progress-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-card);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .status-text {
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .status-subtext {
+            font-size: 14px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Error State */
+        .error-message {
+            padding: 12px 16px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        /* Visibility */
+        .screen {
+            display: none !important;
+        }
+
+        .screen.active {
+            display: flex !important;
+        }
+
+        /* Utility */
+        .text-center {
+            text-align: center;
+        }
+
+        .text-muted {
+            color: var(--text-secondary);
+        }
+
+        .mt-auto {
+            margin-top: auto;
+        }
+
+        /* iOS Safe Area */
+        @supports (padding: max(0px)) {
+            #settingsScreen,
+            #albumScreen,
+            #uploadScreen {
+                padding-top: max(20px, env(safe-area-inset-top));
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+            }
+
+            .camera-controls,
+            .preview-controls {
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Settings Screen -->
+        <div id="settingsScreen" class="screen active">
+            <h1 class="screen-title">⚙️ Settings</h1>
+            
+            <div class="input-group">
+                <label for="immichUrl">Immich URL</label>
+                <input 
+                    type="text" 
+                    id="immichUrl" 
+                    placeholder="https://immich.demo.com"
+                >
+            </div>
+
+            <div class="input-group">
+                <label for="apiKey">API Key</label>
+                <input 
+                    type="password" 
+                    id="apiKey" 
+                    placeholder="Your Immich API key"
+                >
+            </div>
+
+            <div class="info-box">
+                <strong>Create your API key in Immich:</strong><br>
+                Account Settings → API Keys → New API Key<br><br>
+                <strong>Required permissions:</strong><br>
+                • album.read<br>
+                • asset.upload<br>
+                • albumAsset.create
+            </div>
+
+            <button class="button button-primary" id="testConnectionBtn">
+                Test Connection
+            </button>
+
+            <div id="connectionStatus"></div>
+
+            <div class="mt-auto" style="display: flex; flex-direction: column; gap: 12px;">
+                <button class="button button-primary" id="startBtn" disabled>
+                    Start Capturing
+                </button>
+                <button class="button button-secondary" id="cancelSettingsBtn" style="display: none;">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Album Selection Screen -->
+        <div id="albumScreen" class="screen">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <h1 class="screen-title" style="margin-bottom: 0;">📁 Select Album</h1>
+                <button id="settingsCogBtn" style="background: none; border: none; font-size: 24px; cursor: pointer; padding: 4px 8px; color: var(--text-secondary);">⚙️</button>
+            </div>
+
+            <div id="albumLoading" style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 40px 20px;">
+                <div class="loading-spinner"></div>
+                <span>Loading albums...</span>
+            </div>
+
+            <div id="albumList" class="album-list" style="display: none;"></div>
+
+            <div id="albumError" class="error-message" style="display: none;"></div>
+        </div>
+
+        <!-- Camera Screen -->
+        <div id="cameraScreen" class="screen">
+            <div class="camera-header">
+                <span class="album-display">
+                    Album: <span class="name" id="selectedAlbumName">—</span>
+                </span>
+                <button class="button-secondary" id="backFromCameraBtn" style="width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;">
+                    ✕
+                </button>
+            </div>
+
+            <div class="camera-feed-container">
+                <video id="videoElement" playsinline></video>
+                <canvas id="captureCanvas"></canvas>
+            </div>
+
+            <div class="camera-controls">
+                <button class="flip-button" id="flipCameraBtn">🔄</button>
+                <button class="capture-button" id="captureBtn">Capture</button>
+            </div>
+        </div>
+
+        <!-- Preview Screen -->
+        <div id="previewScreen" class="screen">
+            <div class="preview-image-container">
+                <img id="previewImage" src="" alt="Preview">
+            </div>
+
+            <div class="preview-controls">
+                <button class="btn-retake" id="retakeBtn">Retake</button>
+                <button class="btn-upload" id="uploadBtn">Upload</button>
+            </div>
+        </div>
+
+        <!-- Upload Screen -->
+        <div id="uploadScreen" class="screen">
+            <div id="uploadContent">
+                <div class="status-icon">⏳</div>
+                <div class="status-text">Uploading Photos</div>
+                <div class="status-subtext" id="uploadSubtext">Preparing upload...</div>
+                <div class="upload-progress" id="uploadProgress"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State management
+        const state = {
+            immichUrl: localStorage.getItem('immichUrl') || '',
+            apiKey: localStorage.getItem('apiKey') || '',
+            selectedAlbumId: null,
+            selectedAlbumName: null,
+            albums: [],
+            capturedPhotos: [],
+            currentFacingMode: 'environment',
+            stream: null,
+            currentScreen: 'settings'
+        };
+
+        // Utility: Show screen
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            state.currentScreen = screenId;
+        }
+
+        // Settings Screen
+        document.getElementById('immichUrl').value = state.immichUrl;
+        document.getElementById('apiKey').value = state.apiKey;
+
+        document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+            const url = document.getElementById('immichUrl').value.trim();
+            const key = document.getElementById('apiKey').value.trim();
+
+            if (!url || !key) {
+                showStatus('Please fill in both fields', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('testConnectionBtn');
+            btn.disabled = true;
+            btn.textContent = 'Testing...';
+
+            try {
+                const response = await fetch('/test-connection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, apiKey: key })
+                });
+
+                const result = await response.json();
+
+                if (result.error) {
+                    showStatus(`✗ Connection failed: ${result.error}`, 'error');
+                } else if (result.status >= 200 && result.status < 300) {
+                    localStorage.setItem('immichUrl', url);
+                    localStorage.setItem('apiKey', key);
+                    state.immichUrl = url;
+                    state.apiKey = key;
+                    showStatus('✓ Connection successful!', 'success');
+                    document.getElementById('startBtn').disabled = false;
+                } else {
+                    showStatus(`✗ HTTP ${result.status} — check URL and API key`, 'error');
+                }
+            } catch (e) {
+                showStatus(`✗ Connection failed: ${e.message}`, 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Test Connection';
+        });
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.innerHTML = `<div class="info-box" style="background: ${type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-color: ${type === 'success' ? '#10b981' : '#ef4444'}; color: ${type === 'success' ? '#6ee7b7' : '#fca5a5'}">${message}</div>`;
+        }
+
+        document.getElementById('startBtn').addEventListener('click', () => {
+            loadAlbums();
+        });
+
+        // Album Selection
+        async function loadAlbums() {
+            showScreen('albumScreen');
+            document.getElementById('albumList').style.display = 'none';
+            document.getElementById('albumLoading').style.display = 'flex';
+            document.getElementById('albumError').style.display = 'none';
+
+            try {
+                const response = await fetch('/fetch-albums', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: state.immichUrl, apiKey: state.apiKey })
+                });
+
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                if (result.status < 200 || result.status >= 300) throw new Error(`HTTP ${result.status}`);
+                state.albums = JSON.parse(result.body);
+                renderAlbums();
+            } catch (e) {
+                document.getElementById('albumError').textContent = `✗ ${e.message}`;
+                document.getElementById('albumError').style.display = 'block';
+                document.getElementById('albumLoading').style.display = 'none';
+            }
+        }
+
+        function getFavorites() {
+            return JSON.parse(localStorage.getItem('favoriteAlbums') || '[]');
+        }
+
+        function toggleFavorite(albumId) {
+            const favorites = getFavorites();
+            const idx = favorites.indexOf(albumId);
+            if (idx === -1) favorites.push(albumId);
+            else favorites.splice(idx, 1);
+            localStorage.setItem('favoriteAlbums', JSON.stringify(favorites));
+            renderAlbums();
+        }
+
+        function createAlbumItem(album) {
+            const isFav = getFavorites().includes(album.id);
+            const el = document.createElement('div');
+            el.className = 'album-item';
+            el.innerHTML = `
+                <span class="album-name">${album.albumName}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="album-badge">${album.assetCount || 0} photos</span>
+                    <button class="favorite-btn ${isFav ? 'active' : ''}" title="${isFav ? 'Remove from favourites' : 'Add to favourites'}">
+                        ${isFav ? '⭐' : '☆'}
+                    </button>
+                </div>
+            `;
+            el.querySelector('.favorite-btn').addEventListener('click', e => {
+                e.stopPropagation();
+                toggleFavorite(album.id);
+            });
+            el.addEventListener('click', () => selectAlbum(album));
+            return el;
+        }
+
+        function createSection(title, albums, expanded) {
+            const section = document.createElement('div');
+            section.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
+
+            const header = document.createElement('div');
+            header.className = 'section-header';
+            header.innerHTML = `<span class="section-title">${title}</span><span class="section-chevron ${expanded ? '' : 'collapsed'}">▼</span>`;
+
+            const items = document.createElement('div');
+            items.className = `section-items ${expanded ? '' : 'collapsed'}`;
+            albums.forEach(a => items.appendChild(createAlbumItem(a)));
+
+            if (albums.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.cssText = 'padding:12px 4px;font-size:13px;color:var(--text-secondary);';
+                empty.textContent = 'Tap ☆ on an album below to add it here.';
+                items.appendChild(empty);
+            }
+
+            header.addEventListener('click', () => {
+                const collapsed = items.classList.toggle('collapsed');
+                header.querySelector('.section-chevron').classList.toggle('collapsed', collapsed);
+            });
+
+            section.appendChild(header);
+            section.appendChild(items);
+            return section;
+        }
+
+        function renderAlbums() {
+            const container = document.getElementById('albumList');
+            container.innerHTML = '';
+
+            const favorites = getFavorites();
+            const favAlbums = state.albums.filter(a => favorites.includes(a.id));
+            const otherAlbums = state.albums.filter(a => !favorites.includes(a.id));
+
+            container.appendChild(createSection('⭐ Favourites', favAlbums, true));
+            container.appendChild(createSection('All Albums', otherAlbums, favAlbums.length === 0));
+
+            document.getElementById('albumLoading').style.display = 'none';
+            document.getElementById('albumList').style.display = 'flex';
+        }
+
+        function selectAlbum(album) {
+            state.selectedAlbumId = album.id;
+            state.selectedAlbumName = album.albumName;
+            localStorage.setItem('lastAlbum', JSON.stringify({ id: album.id, name: album.albumName }));
+            startCamera();
+        }
+
+        document.getElementById('settingsCogBtn').addEventListener('click', () => {
+            document.getElementById('cancelSettingsBtn').style.display = 'flex';
+            showScreen('settingsScreen');
+        });
+
+        document.getElementById('cancelSettingsBtn').addEventListener('click', () => {
+            loadAlbums();
+        });
+
+        // Camera
+        async function startCamera() {
+            showScreen('cameraScreen');
+            document.getElementById('selectedAlbumName').textContent = state.selectedAlbumName;
+
+            try {
+                const constraints = {
+                    video: {
+                        facingMode: state.currentFacingMode,
+                        width: { ideal: 4096 },
+                        height: { ideal: 4096 }
+                    },
+                    audio: false
+                };
+                state.stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const video = document.getElementById('videoElement');
+                video.srcObject = state.stream;
+                await video.play();
+            } catch (e) {
+                alert('Camera access denied');
+                showScreen('albumScreen');
+            }
+        }
+
+        document.getElementById('captureBtn').addEventListener('click', () => {
+            const video = document.getElementById('videoElement');
+            const canvas = document.getElementById('captureCanvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+
+            canvas.toBlob(blob => {
+                state.capturedPhotos.push(blob);
+                showPreview(canvas.toDataURL('image/jpeg'));
+            }, 'image/jpeg', 1.0);
+        });
+
+        document.getElementById('flipCameraBtn').addEventListener('click', async () => {
+            state.currentFacingMode = state.currentFacingMode === 'environment' ? 'user' : 'environment';
+            if (state.stream) {
+                state.stream.getTracks().forEach(t => t.stop());
+            }
+            await startCamera();
+        });
+
+        document.getElementById('backFromCameraBtn').addEventListener('click', () => {
+            if (state.stream) {
+                state.stream.getTracks().forEach(t => t.stop());
+            }
+            state.capturedPhotos = [];
+            loadAlbums();
+        });
+
+        // Preview
+        function showPreview(dataUrl) {
+            document.getElementById('previewImage').src = dataUrl;
+            showScreen('previewScreen');
+        }
+
+        document.getElementById('retakeBtn').addEventListener('click', () => {
+            state.capturedPhotos.pop();
+            showScreen('cameraScreen');
+        });
+
+        document.getElementById('uploadBtn').addEventListener('click', uploadPhotos);
+
+        // Upload
+        async function uploadPhotos() {
+            showScreen('uploadScreen');
+            document.getElementById('uploadContent').innerHTML = `
+                <div class="status-icon">⏳</div>
+                <div class="status-text">Uploading Photos</div>
+                <div class="status-subtext" id="uploadSubtext">Preparing upload...</div>
+                <div class="upload-progress" id="uploadProgress"></div>
+            `;
+            document.getElementById('uploadSubtext').textContent = `Uploading ${state.capturedPhotos.length} photo(s)...`;
+
+            const progressContainer = document.getElementById('uploadProgress');
+            progressContainer.innerHTML = '';
+
+            let successCount = 0;
+            let failureCount = 0;
+
+            for (let i = 0; i < state.capturedPhotos.length; i++) {
+                const blob = state.capturedPhotos[i];
+                const progressId = `progress-${i}`;
+
+                const progressEl = document.createElement('div');
+                progressEl.className = 'progress-item';
+                progressEl.innerHTML = `
+                    <div class="progress-item-name">Photo ${i + 1} of ${state.capturedPhotos.length}</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="${progressId}"></div>
+                    </div>
+                `;
+                progressContainer.appendChild(progressEl);
+
+                try {
+                    const albumSlug = state.selectedAlbumName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+                    const filename = `${albumSlug}_${Date.now()}_${i}.jpg`;
+                    const now = new Date().toISOString();
+                    const formData = new FormData();
+                    formData.append('assetData', blob, filename);
+                    formData.append('deviceAssetId', filename);
+                    formData.append('deviceId', 'immich-artwork-camera');
+                    formData.append('fileCreatedAt', now);
+                    formData.append('fileModifiedAt', now);
+
+                    const uploadRes = await fetch(
+                        `/proxy-upload?url=${encodeURIComponent(state.immichUrl)}&apiKey=${encodeURIComponent(state.apiKey)}`,
+                        { method: 'POST', body: formData }
+                    );
+                    const uploadResult = await uploadRes.json();
+                    if (uploadResult.error) throw new Error(uploadResult.error);
+                    if (uploadResult.status >= 400) throw new Error(`Upload failed: HTTP ${uploadResult.status}`);
+                    const asset = JSON.parse(uploadResult.body);
+
+                    const albumRes = await fetch('/proxy-add-to-album', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            url: state.immichUrl,
+                            apiKey: state.apiKey,
+                            albumId: state.selectedAlbumId,
+                            assetIds: [asset.id]
+                        })
+                    });
+                    const albumResult = await albumRes.json();
+                    if (albumResult.error) throw new Error(albumResult.error);
+                    if (albumResult.status >= 400) throw new Error(`Album add failed: HTTP ${albumResult.status}`);
+
+                    document.getElementById(progressId).style.width = '100%';
+                    successCount++;
+                } catch (e) {
+                    console.error('Upload error:', e.message);
+                    failureCount++;
+                    document.getElementById(progressId).style.backgroundColor = '#ef4444';
+                }
+            }
+
+            // Show completion
+            setTimeout(() => {
+                const uploadContent = document.getElementById('uploadContent');
+                if (failureCount === 0) {
+                    uploadContent.innerHTML = `
+                        <div class="status-icon">✓</div>
+                        <div class="status-text">Upload Complete</div>
+                        <div class="status-subtext">${successCount} photo(s) saved</div>
+                    `;
+                } else {
+                    uploadContent.innerHTML = `
+                        <div class="status-icon">⚠️</div>
+                        <div class="status-text">Partial Upload</div>
+                        <div class="status-subtext">${successCount} succeeded, ${failureCount} failed</div>
+                    `;
+                }
+
+                const doneBtn = document.createElement('button');
+                doneBtn.className = 'button button-primary mt-auto';
+                doneBtn.style.marginTop = '20px';
+                doneBtn.textContent = 'Capture More';
+                doneBtn.addEventListener('click', () => {
+                    state.capturedPhotos = [];
+                    startCamera();
+                });
+                uploadContent.appendChild(doneBtn);
+            }, 1500);
+        }
+
+        // Initialize: Check if settings exist and load last album
+        window.addEventListener('load', () => {
+            if (state.immichUrl && state.apiKey) {
+                document.getElementById('startBtn').disabled = false;
+                const lastAlbum = localStorage.getItem('lastAlbum');
+                if (lastAlbum) {
+                    const album = JSON.parse(lastAlbum);
+                    state.selectedAlbumId = album.id;
+                    state.selectedAlbumName = album.name;
+                }
+                loadAlbums();
+            }
+        });
+
+        // Register service worker for offline app shell
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+
+        // iOS-specific: Prevent double-tap zoom on non-interactive elements only
+        document.addEventListener('touchstart', (e) => {
+            const tag = e.target.tagName;
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'BUTTON' && !e.target.closest('button, .album-item, .section-header')) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    </script>
+</body>
+</html>

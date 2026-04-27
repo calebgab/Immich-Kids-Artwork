@@ -1,0 +1,7 @@
+services:
+  artwork-camera:
+    build: .
+    container_name: artwork-camera
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
