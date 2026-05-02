@@ -1,4 +1,4 @@
-const CACHE = 'artwork-camera-v1';
+const CACHE = 'artwork-camera-v10';
 const STATIC = ['/', '/manifest.json', '/icon.svg', '/sw.js'];
 
 self.addEventListener('install', event => {

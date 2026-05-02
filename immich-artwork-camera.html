@@ -323,7 +323,7 @@
             object-fit: cover;
         }
 
-        canvas {
+        canvas#captureCanvas {
             display: none;
         }
 
@@ -379,6 +379,35 @@
 
         .flip-button:active {
             background: #2d3748;
+        }
+
+        .scan-button {
+            width: 56px;
+            height: 56px;
+            flex: none;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .scan-button.active {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        #scanOverlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
+            touch-action: none;
         }
 
         /* Screen: Preview */
@@ -612,6 +641,7 @@
                 <button class="button button-secondary" id="cancelSettingsBtn" style="display: none;">
                     Cancel
                 </button>
+                <div style="text-align: center; font-size: 12px; color: var(--text-secondary); opacity: 0.5;">v2026.04.27.10</div>
             </div>
         </div>
 
@@ -656,12 +686,14 @@
 
         <!-- Preview Screen -->
         <div id="previewScreen" class="screen">
-            <div class="preview-image-container">
+            <div class="preview-image-container" style="position:relative;">
                 <img id="previewImage" src="" alt="Preview">
+                <canvas id="scanOverlay"></canvas>
             </div>
 
             <div class="preview-controls">
                 <button class="btn-retake" id="retakeBtn">Retake</button>
+                <button class="scan-button" id="scanModeBtn" title="Apply document scan">📄</button>
                 <button class="btn-upload" id="uploadBtn">Upload</button>
             </div>
         </div>
@@ -688,7 +720,10 @@
             capturedPhotos: [],
             currentFacingMode: 'environment',
             stream: null,
-            currentScreen: 'settings'
+            currentScreen: 'settings',
+            scanMode: false,
+            scanCorners: null,
+            capturedDataUrl: null
         };
 
         // Utility: Show screen
@@ -902,13 +937,11 @@
             const canvas = document.getElementById('captureCanvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0);
-
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            state.capturedDataUrl = canvas.toDataURL('image/jpeg');
             canvas.toBlob(blob => {
                 state.capturedPhotos.push(blob);
-                showPreview(canvas.toDataURL('image/jpeg'));
+                showPreview(state.capturedDataUrl);
             }, 'image/jpeg', 1.0);
         });
 
@@ -928,14 +961,291 @@
             loadAlbums();
         });
 
+        document.getElementById('scanModeBtn').addEventListener('click', () => {
+            state.scanMode = !state.scanMode;
+            document.getElementById('scanModeBtn').classList.toggle('active', state.scanMode);
+            const overlay = document.getElementById('scanOverlay');
+            if (state.scanMode) {
+                const img = document.getElementById('previewImage');
+                const tmp = document.createElement('canvas');
+                tmp.width = img.naturalWidth; tmp.height = img.naturalHeight;
+                tmp.getContext('2d').drawImage(img, 0, 0);
+                state.scanCorners = detectDocumentCorners(tmp);
+                overlay.style.display = 'block';
+                drawScanOverlay();
+            } else {
+                state.scanCorners = null;
+                overlay.style.display = 'none';
+            }
+        });
+
+        // Scan: corner detection via luminance + integral-image neighbourhood density.
+        //
+        // A pixel qualifies as "paper" only if ≥25% of its 40×40 neighbourhood is
+        // bright (paper-coloured). This rejects single noise pixels and JPEG artefacts
+        // while accepting pixels at and near the paper boundary. The integral image
+        // makes neighbourhood queries O(1) so the whole scan is fast.
+        // Only BOUNDARY pixels qualify (lo < bright_fraction < hi): this excludes solid
+        // interior paper pixels and solid background, leaving only the paper edge where
+        // the transition happens. Corner is the most extreme boundary pixel per direction.
+        function detectDocumentCorners(srcCanvas) {
+            const W = srcCanvas.width, H = srcCanvas.height;
+            const maxDim = Math.max(W, H);
+            const scale = maxDim > 640 ? 640 / maxDim : 1;
+            const sw = Math.round(W * scale), sh = Math.round(H * scale);
+
+            const small = document.createElement('canvas');
+            small.width = sw; small.height = sh;
+            small.getContext('2d').drawImage(srcCanvas, 0, 0, sw, sh);
+            const px = small.getContext('2d').getImageData(0, 0, sw, sh).data;
+
+            // Gaussian-blurred luminance to smooth JPEG artefacts
+            const luma = new Float32Array(sw * sh);
+            for (let i = 0; i < sw * sh; i++) {
+                luma[i] = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
+            }
+            const blurred = new Float32Array(sw * sh);
+            for (let y = 1; y < sh - 1; y++) {
+                for (let x = 1; x < sw - 1; x++) {
+                    blurred[y*sw+x] = (
+                        luma[(y-1)*sw+(x-1)] + 2*luma[(y-1)*sw+x] + luma[(y-1)*sw+(x+1)] +
+                        2*luma[y*sw+(x-1)]   + 4*luma[y*sw+x]     + 2*luma[y*sw+(x+1)] +
+                        luma[(y+1)*sw+(x-1)] + 2*luma[(y+1)*sw+x] + luma[(y+1)*sw+(x+1)]
+                    ) / 16;
+                }
+            }
+
+            // Threshold separating paper (bright) from background
+            let lumaMin = 255, lumaMax = 0;
+            for (let i = 0; i < sw * sh; i++) {
+                if (blurred[i] < lumaMin) lumaMin = blurred[i];
+                if (blurred[i] > lumaMax) lumaMax = blurred[i];
+            }
+            const thresh = lumaMin + (lumaMax - lumaMin) * 0.55;
+
+            // Integral image of binary bright map — enables O(1) rectangle sum queries
+            const integ = new Int32Array((sw + 1) * (sh + 1));
+            for (let y = 0; y < sh; y++) {
+                for (let x = 0; x < sw; x++) {
+                    integ[(y+1)*(sw+1)+(x+1)] = (blurred[y*sw+x] > thresh ? 1 : 0)
+                        + integ[y*(sw+1)+(x+1)]
+                        + integ[(y+1)*(sw+1)+x]
+                        - integ[y*(sw+1)+x];
+                }
+            }
+            const boxSum = (x1, y1, x2, y2) => {
+                x1 = Math.max(0, x1); y1 = Math.max(0, y1);
+                x2 = Math.min(sw-1, x2); y2 = Math.min(sh-1, y2);
+                if (x1 > x2 || y1 > y2) return 0;
+                return integ[(y2+1)*(sw+1)+(x2+1)]
+                     - integ[y1*(sw+1)+(x2+1)]
+                     - integ[(y2+1)*(sw+1)+x1]
+                     + integ[y1*(sw+1)+x1];
+            };
+
+            // Paper centroid (center of bright region) used to restrict each corner's
+            // search to its correct quadrant, preventing far-side false positives.
+            let totB = 0, sx = 0, sy = 0;
+            for (let y = 0; y < sh; y++) {
+                for (let x = 0; x < sw; x++) {
+                    if (blurred[y*sw+x] > thresh) { totB++; sx += x; sy += y; }
+                }
+            }
+            const cx = totB > 0 ? sx / totB : sw / 2;
+            const cy = totB > 0 ? sy / totB : sh / 2;
+            const qmx = sw * 0.35, qmy = sh * 0.35;
+
+            // lo excludes solid background; hi excludes solid interior paper pixels.
+            // Paper boundary pixels have fraction ~0.25 (corner) to ~0.50 (edge midpoint).
+            const r = 20, lo = 0.10, hi = 0.80;
+
+            let tlS = Infinity, trS = Infinity, brS = Infinity, blS = Infinity;
+            let tlC = { x:sw*0.1, y:sh*0.1 }, trC = { x:sw*0.9, y:sh*0.1 };
+            let brC = { x:sw*0.9, y:sh*0.9 }, blC = { x:sw*0.1, y:sh*0.9 };
+
+            for (let y = 0; y < sh; y++) {
+                for (let x = 0; x < sw; x++) {
+                    const aW = Math.min(x+r, sw-1) - Math.max(x-r, 0) + 1;
+                    const aH = Math.min(y+r, sh-1) - Math.max(y-r, 0) + 1;
+                    const frac = boxSum(x-r, y-r, x+r, y+r) / (aW * aH);
+                    if (frac < lo || frac > hi) continue;
+
+                    const dx = x - cx, dy = y - cy;
+                    if (x+y               < tlS && dx <= qmx && dy <= qmy)  { tlS = x+y;               tlC = { x, y }; }
+                    if ((sw-1-x)+y        < trS && -dx <= qmx && dy <= qmy) { trS = (sw-1-x)+y;        trC = { x, y }; }
+                    if ((sw-1-x)+(sh-1-y) < brS && -dx <= qmx && -dy <= qmy){ brS = (sw-1-x)+(sh-1-y);brC = { x, y }; }
+                    if (x+(sh-1-y)        < blS && dx <= qmx && -dy <= qmy) { blS = x+(sh-1-y);        blC = { x, y }; }
+                }
+            }
+
+            let corners = [tlC, trC, brC, blC].map(c => ({ x: c.x / scale, y: c.y / scale }));
+
+            // Sanity check — fall back to full frame with small margin if degenerate
+            const qw = Math.max(corners[1].x - corners[0].x, corners[2].x - corners[3].x);
+            const qh = Math.max(corners[3].y - corners[0].y, corners[2].y - corners[1].y);
+            if (qw < W * 0.2 || qh < H * 0.2) {
+                const m = 0.05;
+                return [
+                    { x:W*m, y:H*m }, { x:W*(1-m), y:H*m },
+                    { x:W*(1-m), y:H*(1-m) }, { x:W*m, y:H*(1-m) }
+                ];
+            }
+
+            return corners;
+        }
+
+        // Scan: perspective warp using strip-based affine approximation (150 strips)
+        function applyPerspectiveWarp(srcCanvas, corners) {
+            const [tl, tr, br, bl] = corners;
+            const topW  = Math.hypot(tr.x-tl.x, tr.y-tl.y);
+            const botW  = Math.hypot(br.x-bl.x, br.y-bl.y);
+            const leftH = Math.hypot(bl.x-tl.x, bl.y-tl.y);
+            const rightH= Math.hypot(br.x-tr.x, br.y-tr.y);
+            const dstW  = Math.round((topW + botW) / 2);
+            const dstH  = Math.round((leftH + rightH) / 2);
+
+            const dst = document.createElement('canvas');
+            dst.width = dstW; dst.height = dstH;
+            const ctx = dst.getContext('2d');
+
+            const N = 150;
+            for (let i = 0; i < N; i++) {
+                const t0 = i / N, t1 = (i + 1) / N;
+                const sl0 = { x: tl.x+(bl.x-tl.x)*t0, y: tl.y+(bl.y-tl.y)*t0 };
+                const sl1 = { x: tl.x+(bl.x-tl.x)*t1, y: tl.y+(bl.y-tl.y)*t1 };
+                const sr0 = { x: tr.x+(br.x-tr.x)*t0, y: tr.y+(br.y-tr.y)*t0 };
+                const dy0 = t0 * dstH, dy1 = t1 * dstH, stripH = dy1 - dy0;
+
+                const v1x = sr0.x-sl0.x, v1y = sr0.y-sl0.y;
+                const v2x = sl1.x-sl0.x, v2y = sl1.y-sl0.y;
+                const det = v1x*v2y - v1y*v2x;
+                if (Math.abs(det) < 1e-10) continue;
+
+                const a = dstW*v2y/det,  c = -dstW*v2x/det;
+                const b = -stripH*v1y/det, d = stripH*v1x/det;
+                const e = -a*sl0.x - c*sl0.y;
+                const f = dy0 - b*sl0.x - d*sl0.y;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, dy0, dstW, stripH + 1);
+                ctx.clip();
+                ctx.setTransform(a, b, c, d, e, f);
+                ctx.drawImage(srcCanvas, 0, 0);
+                ctx.restore();
+            }
+            return dst;
+        }
+
+        // Scan: actual displayed image rect inside object-fit:contain container
+        function getDisplayRect(img) {
+            const cW = img.clientWidth, cH = img.clientHeight;
+            const iW = img.naturalWidth, iH = img.naturalHeight;
+            if (!iW || !iH) return { x: 0, y: 0, w: cW, h: cH, scale: 1 };
+            const scale = Math.min(cW / iW, cH / iH);
+            return { x: (cW - iW*scale)/2, y: (cH - iH*scale)/2, w: iW*scale, h: iH*scale, scale };
+        }
+
+        // Scan: draw quad + draggable handles on the overlay canvas
+        function drawScanOverlay() {
+            const overlay = document.getElementById('scanOverlay');
+            const img    = document.getElementById('previewImage');
+            overlay.width  = overlay.offsetWidth;
+            overlay.height = overlay.offsetHeight;
+            const ctx = overlay.getContext('2d');
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            if (!state.scanCorners) return;
+
+            const d  = getDisplayRect(img);
+            const dc = state.scanCorners.map(c => ({ x: d.x + c.x*d.scale, y: d.y + c.y*d.scale }));
+
+            ctx.beginPath();
+            ctx.moveTo(dc[0].x, dc[0].y);
+            ctx.lineTo(dc[1].x, dc[1].y);
+            ctx.lineTo(dc[2].x, dc[2].y);
+            ctx.lineTo(dc[3].x, dc[3].y);
+            ctx.closePath();
+            ctx.fillStyle   = 'rgba(37,99,235,0.15)';
+            ctx.fill();
+            ctx.strokeStyle = '#60a5fa';
+            ctx.lineWidth   = 2;
+            ctx.stroke();
+
+            dc.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 18, 0, Math.PI * 2);
+                ctx.fillStyle   = '#2563eb';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth   = 2;
+                ctx.stroke();
+            });
+        }
+
+        // Scan: wire up touch/mouse drag for corner handles (called once on init)
+        function setupScanOverlayDrag() {
+            const overlay = document.getElementById('scanOverlay');
+            const img    = document.getElementById('previewImage');
+            let dragging = null;
+
+            function getPos(e) {
+                const r = overlay.getBoundingClientRect();
+                const src = e.touches ? e.touches[0] : e;
+                return { x: src.clientX - r.left, y: src.clientY - r.top };
+            }
+
+            function onStart(e) {
+                if (!state.scanCorners) return;
+                const pos = getPos(e);
+                const d = getDisplayRect(img);
+                let best = 44, idx = null;
+                state.scanCorners.forEach((c, i) => {
+                    const dist = Math.hypot(pos.x - (d.x + c.x*d.scale), pos.y - (d.y + c.y*d.scale));
+                    if (dist < best) { best = dist; idx = i; }
+                });
+                if (idx !== null) { dragging = idx; e.preventDefault(); e.stopPropagation(); }
+            }
+
+            function onMove(e) {
+                if (dragging === null) return;
+                e.preventDefault();
+                const pos = getPos(e);
+                const d = getDisplayRect(img);
+                state.scanCorners[dragging] = {
+                    x: Math.max(0, Math.min(img.naturalWidth,  (pos.x - d.x) / d.scale)),
+                    y: Math.max(0, Math.min(img.naturalHeight, (pos.y - d.y) / d.scale))
+                };
+                drawScanOverlay();
+            }
+
+            function onEnd() { dragging = null; }
+
+            overlay.addEventListener('mousedown',  onStart);
+            overlay.addEventListener('mousemove',  onMove);
+            overlay.addEventListener('mouseup',    onEnd);
+            overlay.addEventListener('touchstart', onStart, { passive: false });
+            overlay.addEventListener('touchmove',  onMove,  { passive: false });
+            overlay.addEventListener('touchend',   onEnd);
+        }
+
         // Preview
         function showPreview(dataUrl) {
-            document.getElementById('previewImage').src = dataUrl;
+            const img = document.getElementById('previewImage');
+            img.src = dataUrl;
+            state.scanMode = false;
+            state.scanCorners = null;
+            document.getElementById('scanOverlay').style.display = 'none';
+            document.getElementById('scanModeBtn').classList.remove('active');
             showScreen('previewScreen');
         }
 
         document.getElementById('retakeBtn').addEventListener('click', () => {
             state.capturedPhotos.pop();
+            state.scanMode = false;
+            state.scanCorners = null;
+            state.capturedDataUrl = null;
+            document.getElementById('scanOverlay').style.display = 'none';
+            document.getElementById('scanModeBtn').classList.remove('active');
             showScreen('cameraScreen');
         });
 
@@ -951,6 +1261,27 @@
                 <div class="upload-progress" id="uploadProgress"></div>
             `;
             document.getElementById('uploadSubtext').textContent = `Uploading ${state.capturedPhotos.length} photo(s)...`;
+
+            // Apply perspective warp to the last captured photo if scan mode is active.
+            // Source from the original blob (not the data URL) to avoid double JPEG compression.
+            if (state.scanMode && state.scanCorners) {
+                const sourceBlob = state.capturedPhotos[state.capturedPhotos.length - 1];
+                await new Promise(resolve => {
+                    const tmpImg = new Image();
+                    const blobUrl = URL.createObjectURL(sourceBlob);
+                    tmpImg.onload = () => {
+                        URL.revokeObjectURL(blobUrl);
+                        const src = document.createElement('canvas');
+                        src.width = tmpImg.naturalWidth; src.height = tmpImg.naturalHeight;
+                        src.getContext('2d').drawImage(tmpImg, 0, 0);
+                        applyPerspectiveWarp(src, state.scanCorners).toBlob(blob => {
+                            state.capturedPhotos[state.capturedPhotos.length - 1] = blob;
+                            resolve();
+                        }, 'image/jpeg', 0.95);
+                    };
+                    tmpImg.src = blobUrl;
+                });
+            }
 
             const progressContainer = document.getElementById('uploadProgress');
             progressContainer.innerHTML = '';
@@ -1046,6 +1377,7 @@
 
         // Initialize: Check if settings exist and load last album
         window.addEventListener('load', () => {
+            setupScanOverlayDrag();
             if (state.immichUrl && state.apiKey) {
                 document.getElementById('startBtn').disabled = false;
                 const lastAlbum = localStorage.getItem('lastAlbum');
