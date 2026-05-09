@@ -1,6 +1,6 @@
 services:
   artwork-camera:
-    build: .
+    image: ghcr.io/calebgab/immich-kids-artwork:latest
     container_name: artwork-camera
     restart: unless-stopped
     ports:
